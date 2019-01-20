@@ -58,8 +58,6 @@ class stringTransformer(TransformerMixin):
 
     def transform(self, X):
         suffix = "_" + self.colname 
-        ## alternative line: string_column.str.lower().str.decode('ascii', 'ignore')
-        #str_series = X[self.colname].apply(str).apply(lambda x: ''.join([i if ord(i) < 128 else ' ' for i in x]))
         str_series = X[self.colname].str.decode('ascii', 'ignore')
         embedding = str_series.apply(lambda x: sent2vec(x,self.model)).apply(np.nan_to_num)
         
@@ -89,50 +87,52 @@ class stringComparison(TransformerMixin):
 
        at2:
     """
-    def __init__(self, col1=None, col2=None, model=None, norm_model=None):
-        self.col1 = col1
-        self.col2 = col2
+    def __init__(self, col=None, sentence=None, suffix=None, model=None, norm_model=None):
+        self.col = col
+        self.sentence = sentence
+        self.suffix=suffix
         self.model = model
         self.norm_model = norm_model
 
-    def transform(self, X):        
-        suffix = "_" + self.col1 + "_"+ self.col2
-
-        strings = pd.DataFrame(index = X.index)
-        ## alternative line: string_column.str.lower().str.decode('ascii', 'ignore')
-        #strings['1'] = X[self.col1].apply(str).apply(lambda x: ''.join([i if ord(i) < 128 else ' ' for i in x]))
-        #strings['2'] = X[self.col2].apply(str).apply(lambda x: ''.join([i if ord(i) < 128 else ' ' for i in x]))
+    def transform(self, X):   
 
         
-        strings['1'] = X[self.col1].str.decode('ascii', 'ignore')
-        strings['2'] = X[self.col2].str.decode('ascii', 'ignore')
-        embeddings = pd.DataFrame(index = X.index)
-        embeddings['1'] = strings['1'].apply(lambda x: sent2vec(x,self.model)).apply(np.nan_to_num)
-        embeddings['2'] = strings['2'].apply(lambda x: sent2vec(x,self.model)).apply(np.nan_to_num)
-        
-        self.debbug = embeddings.copy()
+        strings = X[self.col].str.decode('ascii', 'ignore')
+        embedded_strings = strings.apply(lambda x: sent2vec(x,self.model)).apply(np.nan_to_num)
+
+        self.debbug = embedded_strings
+        self.debbug2 = embedded_sentence
         
         df = pd.DataFrame(index = X.index)
-        df['wmd' + suffix] = strings.apply(lambda x: wmd(x['1'], x['2'], self.model), axis=1) 
-        df['norm_wmd' + suffix] = strings.apply(lambda x: wmd(x['1'], x['2'], self.norm_model), axis=1)  
+        
+        ## for sentence in sentence_list:
+        
+        sentence=self.sentence
+        embedded_sentence = np.nan_to_num(sent2vec(sentence,self.model))
+        
+        
+        suffix = self.suffix
+        df['wmd' + suffix] = strings.apply(lambda x: wmd(x, sentence, self.model)) 
+        df['norm_wmd' + suffix] = strings.apply(lambda x: wmd(x, sentence, self.norm_model))  
         df['common_words' + suffix] = strings.apply(
-            lambda x: len(set(x['1'].lower().split()).intersection(set(x['2'].lower().split()))), axis=1)
-        df['fuzz_qratio' + suffix] = strings.apply(lambda x: fuzz.QRatio(x['1'], x['2']), axis=1)
-        df['fuzz_WRatio' + suffix] = strings.apply(lambda x: fuzz.WRatio(x['1'], x['2']), axis=1)
-        df['fuzz_partial_ratio' + suffix] = strings.apply(lambda x: fuzz.partial_ratio(x['1'], x['2']), axis=1)
+            lambda x: len(set(x.lower().split()).intersection(set(sentence.lower().split()))))
+        df['fuzz_qratio' + suffix] = strings.apply(lambda x: fuzz.QRatio(x, sentence))
+        df['fuzz_WRatio' + suffix] = strings.apply(lambda x: fuzz.WRatio(x, sentence))
+        df['fuzz_partial_ratio' + suffix] = strings.apply(lambda x: fuzz.partial_ratio(x, sentence))
         df['fuzz_partial_token_set_ratio' + suffix] = strings.apply(
-            lambda x: fuzz.partial_token_set_ratio(x['1'], x['2']), axis=1)
+            lambda x: fuzz.partial_token_set_ratio(x, sentence))
         df['fuzz_partial_token_sort_ratio' + suffix] = strings.apply(
-            lambda x: fuzz.partial_token_sort_ratio(x['1'], x['2']), axis=1)
-        df['fuzz_token_set_ratio' + suffix] = strings.apply(lambda x: fuzz.token_set_ratio(x['1'], x['2']), axis=1)
-        df['fuzz_token_sort_ratio' + suffix] = strings.apply(lambda x: fuzz.token_sort_ratio(x['1'], x['2']), axis=1)
-        df['cosine_distance'  + suffix] = embeddings.apply(lambda x: cosine(x['1'], x['2']),axis=1)
-        df['cityblock_distance' + suffix] = embeddings.apply(lambda x: cityblock(x['1'], x['2']),axis=1)
-        df['jaccard_distance' + suffix] = embeddings.apply(lambda x: jaccard(x['1'], x['2']),axis=1)
-        df['canberra_distance' + suffix] = embeddings.apply(lambda x: canberra(x['1'], x['2']),axis=1)
-        df['euclidean_distance' + suffix] = embeddings.apply(lambda x: euclidean(x['1'], x['2']),axis=1)
-        df['minkowski_distance' + suffix] = embeddings.apply(lambda x: minkowski(x['1'], x['2']),axis=1)
-        df['braycurtis_distance' + suffix] = embeddings.apply(lambda x: braycurtis(x['1'], x['2']),axis=1)
+            lambda x: fuzz.partial_token_sort_ratio(x, sentence))
+        df['fuzz_token_set_ratio' + suffix] = strings.apply(lambda x: fuzz.token_set_ratio(x, sentence))
+        df['fuzz_token_sort_ratio' + suffix] = strings.apply(lambda x: fuzz.token_sort_ratio(x, sentence))
+        
+        df['cosine_distance'  + suffix] = embedded_strings.apply(lambda x: cosine(x, embedded_sentence))
+        df['cityblock_distance' + suffix] = embedded_strings.apply(lambda x: cityblock(x, embedded_sentence))
+        df['jaccard_distance' + suffix] = embedded_strings.apply(lambda x: jaccard(x, embedded_sentence))
+        df['canberra_distance' + suffix] = embedded_strings.apply(lambda x: canberra(x, embedded_sentence))
+        df['euclidean_distance' + suffix] = embedded_strings.apply(lambda x: euclidean(x, embedded_sentence))
+        df['minkowski_distance' + suffix] = embedded_strings.apply(lambda x: minkowski(x, embedded_sentence))
+        df['braycurtis_distance' + suffix] = embedded_strings.apply(lambda x: braycurtis(x, embedded_sentence))
         return df
 
 
